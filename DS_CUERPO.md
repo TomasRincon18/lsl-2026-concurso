@@ -1,11 +1,4 @@
-# Especificaciones técnicas — Ciencia de Datos
-
-> Destinatario: Equipo de Derecho, para integrar en el documento de fase escrita.
-> Puntos cubiertos: 4, 5, 8, 9, 10, 12 del índice.
-> Formato: Arial 12, espacio sencillo, márgenes 1.5 cm, tamaño carta, APA 7.ª ed.
-> [validar]: pendiente de confirmación con mentoría.
-
----
+# Especificaciones técnicas, Ciencia de Datos
 
 ## 4. Modelo TO-BE y alcance del piloto (diseño técnico viable)
 
@@ -60,18 +53,18 @@ La capa de orquestación mantiene un registro único con modelo canónico de dat
 ### 5.2 Arquitectura lógica
 
 ```
-[ Capa de acceso ]  Bandejas URAB · Bandejas profesionales · Dashboards (M8)
-  HTTPS/TLS 1.3 · OAuth2/JWT
+[ Capa de acceso ] Bandejas URAB · Bandejas profesionales · Dashboards (M8)
+ HTTPS/TLS 1.3 · OAuth2/JWT
 ──────────────────────────────────────────────────────────────
 [ Capa de orquestación ] API Gateway · Message Broker · Workflow ingreso→cierre · Bitácora
 ──────────────────────────────────────────────────────────────
 [ Plataforma de agentes de IA en nube corporativa ]
-  ● M2: Clasificación y triaje (BETO fine-tuned)
-  ● M4: Anti-duplicación (Sentence-Transformers + cosine similarity)
-  ● M6: Asistente generativo RAG (ChromaDB + Mistral 7B)
-  ● M5: Historial unificado (Elasticsearch)
-  ● M1: OCR (Tesseract) + NER (spaCy)
-  ● Administración: versionamiento, monitoreo, drift, feedback loop
+ ● M2: Clasificación y triaje (BETO fine-tuned)
+ ● M4: Anti-duplicación (Sentence-Transformers + cosine similarity)
+ ● M6: Asistente generativo RAG (ChromaDB + Mistral 7B)
+ ● M5: Historial unificado (Elasticsearch)
+ ● M1: OCR (Tesseract) + NER (spaCy)
+ ● Administración: versionamiento, monitoreo, drift, feedback loop
 ──────────────────────────────────────────────────────────────
 [ Modelo canónico de datos ] PostgreSQL + pgvector (cloud-managed)
 ──────────────────────────────────────────────────────────────
@@ -99,7 +92,6 @@ La capa de orquestación mantiene un registro único con modelo canónico de dat
 | Dashboard | Streamlit (piloto) → Power BI (prod) | Python puro, Power BI usado en sector público | Apache 2.0 / Microsoft |
 | Seguridad | OAuth2/JWT + TLS 1.3 + AES-256 + WAF | Sin estado, cifrado estándar, protección web | IETF |
 
-Infraestructura [validar]: desarrollo 4 vCPU/16 GB/100 GB SSD; piloto 8+ vCPU/32 GB/500 GB SSD/1 GPU T4; nacional 16+ vCPU/64 GB/2 TB/2 GPU T4 HA.
 
 ### 5.4 Módulos
 
@@ -248,6 +240,3 @@ Línea base en Fase 0 (Q18: no hay mediciones automatizadas). Valores AS-IS esti
 
 El punto óptimo (99.5% recall, ~18 FP/día, ~90 min extra) es operativamente viable. Monitoreo: diario (FN real → revisión inmediata), mensual (recalculo precisión/recall), trimestral (informe al Comité de IA con recomendación de ajuste).
 
----
-
-*Documento preparado por el equipo de Ciencia de Datos. Consolida las especificaciones técnicas de los puntos 4, 5, 8, 9, 10 y 12 del índice en un único entregable.*
