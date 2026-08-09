@@ -1,0 +1,46 @@
+# Anexo B — Stack tecnológico completo
+
+> **Referenciado desde:** §5.2 (arquitectura lógica y stack) del borrador principal.
+
+---
+
+## Stack tecnológico con justificación detallada
+
+| Capa | Tecnología | Versión | ¿Para qué sirve? | ¿Por qué esta y no otra? | Alternativas evaluadas | Licencia | Soberanía |
+|---|---|---|---|---|---|---|---|
+| Backend / API | **FastAPI** (Python) | ≥0.110 | Recibir peticiones HTTP, orquestar módulos, exponer endpoints REST documentados automáticamente | Alto rendimiento (async nativo con asyncio). Documentación OpenAPI/Swagger automática sin configuración adicional. Ecosistema nativo de IA en Python (transformers, spaCy, sentence-transformers). Validación de datos con Pydantic. | Django REST, Flask | MIT | ✅ Self-hosted |
+| Clasificación NLP | **BETO** (`dccuchile/bert-base-spanish-wwm-uncased`) | Base | Clasificar peticiones en las 4 categorías jurídicas y ~12 sub-temas | Entrenado por la Universidad de Chile específicamente en español (Wikipedia, noticias, libros en español). 110M parámetros (ligero, no requiere GPU de alto costo). Whole Word Masking (entiende palabras completas, no sub-palabras). Probado en tareas de dominio legal en español. | RoBERTa-es (más pesado, marginalmente mejor), Multilingual BERT (no optimizado para español) | MIT | ✅ Se descarga una vez, se fine-tunea localmente |
+| Extracción de entidades (NER) | **spaCy** (`es_core_news_lg`) | ≥3.7 | Extraer nombres, CC, direcciones, teléfonos, hechos y pretensiones del texto libre de las peticiones | Pipeline de NLP más maduro para español. Velocidad de inferencia superior a transformers para NER. Permite fine-tuning con datos propios del dominio Defensoría. Componentes integrados: tokenización, POS tagging, dependency parsing, NER. | Stanza, Flair | MIT | ✅ Self-hosted |
+| Similitud semántica | **Sentence-Transformers** (`paraphrase-multilingual-mpnet-base-v2`) | ≥2.2 | Convertir textos en embeddings (vectores de 768 dimensiones) para comparar significados y detectar duplicados | Modelo multilingüe optimizado para similitud semántica (paráfrasis). Entrenado en 50+ idiomas incluyendo español. Métricas de similitud superiores a modelos solo en español en tareas cross-lingual. Embeddings de 768 dimensiones balancean precisión y eficiencia de almacenamiento. | BETO embeddings, LASER, LaBSE | Apache 2.0 | ✅ Se descarga una vez, se usa localmente |
+| LLM generativo | **Mistral 7B** (Instruct v0.2) | 7B params | Generar borradores de respuesta a peticiones ciudadanas | Mejor relación calidad/eficiencia entre modelos open-source de 7B parámetros. Corre en hardware accesible (1 GPU con 16GB VRAM o CPU con suficiente RAM vía cuantización). Licencia Apache 2.0 permite uso comercial y gubernamental sin restricciones. Self-hosted garantiza soberanía de datos: ninguna petición ciudadana sale de la infraestructura de la Defensoría. | Llama 3 8B, Qwen 2.5 7B, Gemma 7B | Apache 2.0 | ✅ Self-hosted (Ollama/vLLM en servidores propios) |
+| RAG (búsqueda + generación) | **LangChain + ChromaDB** | LangChain ≥0.1, ChromaDB ≥0.4 | Buscar fragmentos relevantes de normativa y jurisprudencia antes de que el LLM genere una respuesta | LangChain: framework estándar de la industria para pipelines RAG. Abstrae la cadena retrieval→prompt→LLM→output. ChromaDB: base de datos vectorial ligera, open-source, sin necesidad de servidor separado (embebible). Suficiente para la escala de la base de conocimiento de la Defensoría. | LlamaIndex + Qdrant, Haystack + Weaviate | MIT / Apache 2.0 | ✅ Self-hosted |
+| OCR | **Tesseract LSTM** (`spa`) + **OpenCV** | Tesseract 5.x, OpenCV 4.x | Convertir documentos escaneados y fotos en texto estructurado | Tesseract con modelo LSTM para español (spa) alcanza CER <5% en documentos limpios. OpenCV para preprocesamiento: deskew (corrige documentos torcidos), binarización adaptativa (mejora contraste de fotos), eliminación de ruido. Sin costo de licencia, ampliamente usado en gobierno. | Google Cloud Vision (costo, datos salen de la entidad), Azure OCR (costo, nube externa) | Apache 2.0 | ✅ Self-hosted |
+| BD transaccional + vectorial | **PostgreSQL + pgvector** | PG 15+, pgvector 0.5+ | Almacenar casos, ciudadanos, profesionales, respuestas, eventos de sincronización. También embeddings para búsqueda semántica. | PostgreSQL es el estándar de bases de datos relacionales en el sector público colombiano. pgvector extiende PostgreSQL con índices vectoriales (IVFFlat), evitando una base de datos vectorial separada y simplificando la arquitectura. ACID compliant. | MySQL, MongoDB + Pinecone, Oracle | PostgreSQL License (permisiva) | ✅ Self-hosted |
+| Búsqueda textual | **Elasticsearch** | 8.x | Indexar y buscar historial de peticiones por cédula, nombre, palabras clave en texto completo | Motor de búsqueda escalable horizontalmente. Búsquedas textuales en <500ms incluso con millones de documentos. Agregaciones para dashboards. Analizador configurable para español (stemming, stopwords). | Solr, OpenSearch, PostgreSQL full-text search | Elastic License 2.0 (gratuito para self-hosted) | ✅ Self-hosted |
+| Mensajería | **RabbitMQ** | 3.12+ | Comunicar de forma confiable el sistema nuevo con IRIS y VisionWeb | Estándar en integración empresarial y sector público. Garantiza entrega de mensajes (acknowledgements, confirmaciones). Colas persistentes en disco (no se pierden mensajes si el servidor se cae). Reintentos y dead letter queues nativos. | Apache Kafka (sobredimensionado para este volumen), Redis Pub/Sub (sin persistencia) | Mozilla Public License 2.0 | ✅ Self-hosted |
+| MLOps | **MLflow + DVC + Evidently AI** | MLflow 2.x, DVC 3.x, Evidently 0.3+ | Versionar modelos (MLflow), datos (DVC), monitorear drift y rendimiento (Evidently) | MLflow: estándar de facto para tracking de experimentos y registro de modelos. DVC: versiona datasets como Git versiona código, con almacenamiento remoto (S3/GCS). Evidently: genera reportes automáticos de drift y equidad con visualizaciones listas para el Comité de IA. | Weights & Biases, Neptune, Great Expectations | Apache 2.0 (los tres) | ✅ Self-hosted |
+| Dashboard | **Streamlit** (piloto) → **Power BI** (producción) | Streamlit ≥1.28 | Visualizar métricas de operación, calidad y equidad para profesionales y directivos | Streamlit: prototipado en horas con Python puro, sin necesidad de frontend separado. Power BI: ya usado en el sector público colombiano, se integra con PostgreSQL vía connector nativo, permite programar refrescos y compartir dashboards con control de acceso. | Grafana, Tableau, Looker | Apache 2.0 / Licencia Microsoft | ✅ Self-hosted / Microsoft 365 Government |
+| Infraestructura | **Docker + Docker Compose** | Docker 24+, Compose v2 | Empaquetar todos los servicios en contenedores idénticos en desarrollo, staging y producción | Portabilidad total: el mismo contenedor corre en el laptop del desarrollador y en el servidor de producción. Escalamiento horizontal (varios contenedores del mismo servicio). Orquestación futura migrable a Kubernetes si se requiere. | Kubernetes, Podman, LXC | Apache 2.0 | ✅ Self-hosted |
+| Seguridad | **OAuth2/JWT + TLS 1.3 + AES-256** | — | Autenticar usuarios, autorizar acciones por rol, cifrar datos en tránsito y reposo | OAuth2/JWT: autenticación sin estado (el servidor no guarda sesiones), tokens con expiración configurable. TLS 1.3: elimina algoritmos obsoletos, handshake más rápido. AES-256: cifrado simétrico estándar militar para datos en reposo (PostgreSQL TDE, backups cifrados). | SAML, Basic Auth, mTLS | Estándares abiertos / IETF | ✅ Self-hosted |
+
+---
+
+## Criterios de selección aplicados
+
+1. **Soberanía de datos:** todas las tecnologías de IA seleccionadas son self-hosted. Los datos de los ciudadanos nunca se envían a servicios externos (APIs de OpenAI, Google, Azure). Cumplimiento directo del CONPES 4144 (§5.1) y la Ley 1581 de 2012.
+2. **Código abierto:** 100% de las tecnologías core tienen licencias que permiten uso comercial y gubernamental sin costo de licenciamiento (MIT, Apache 2.0, MPL 2.0). Solo Elasticsearch tiene licencia no-estándar pero gratuita para self-hosted.
+3. **Madurez y soporte comunitario:** se priorizaron herramientas con comunidades activas, documentación extensa y uso comprobado en sector público (PostgreSQL, RabbitMQ, Elasticsearch).
+4. **Curva de aprendizaje:** el stack es 100% Python (excepto infraestructura Docker), el lenguaje dominante en ciencia de datos e IA, facilitando la transferencia de conocimiento a la Defensoría en la Fase 4.
+5. **Escalabilidad:** la arquitectura de contenedores permite escalar horizontalmente añadiendo más instancias de los servicios con mayor demanda, sin rediseñar el sistema.
+
+---
+
+## Infraestructura requerida estimada `[validar]`
+
+| Entorno | CPU | RAM | Almacenamiento | GPU (opcional) |
+|---|---|---|---|---|
+| Desarrollo (por desarrollador) | 4 cores | 16 GB | 100 GB SSD | No requerida (modelos pequeños caben en CPU) |
+| Piloto (URAB Bogotá) | 8 cores | 32 GB | 500 GB SSD | 1x NVIDIA T4 o equivalente (16 GB VRAM) para Mistral 7B |
+| Producción (nacional) | 16+ cores | 64+ GB | 2 TB SSD + backup | 2x NVIDIA T4 para alta disponibilidad del LLM |
+
+> El cómputo se asume en GovCloud del MinTIC o infraestructura on-prem de la Defensoría, según la decisión que se tome en la Fase 0 alineada con Q7 del Banco de Preguntas.
