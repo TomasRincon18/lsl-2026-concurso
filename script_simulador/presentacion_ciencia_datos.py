@@ -1054,6 +1054,7 @@ def html_barras_metricas(metricas, metricas_prev=None):
     desde el estado anterior y conteo numérico al cambiar de ciclo."""
 
     nombres = list(UMBRALES.keys())
+    uid = f"am-bars-{id(metricas)}"
     filas = []
 
     for nombre in nombres:
@@ -1070,7 +1071,7 @@ def html_barras_metricas(metricas, metricas_prev=None):
             '<div style="flex:1;position:relative;height:20px;'
             'background:rgba(148,163,184,0.08);border-radius:10px;overflow:hidden;">'
             '<div class="am-bar" style="position:absolute;left:0;top:0;bottom:0;'
-            f'width:0%;border-radius:10px;'
+            f'width:{valor}%;border-radius:10px;'
             f'background:linear-gradient(90deg,{color}88,{color});'
             f'box-shadow:0 0 12px {color}55;"></div>'
             f'<div style="position:absolute;left:{min(meta, 100.0)}%;top:-4px;bottom:-4px;'
@@ -1078,7 +1079,7 @@ def html_barras_metricas(metricas, metricas_prev=None):
             "</div>"
             '<div class="am-val" style="width:66px;min-width:66px;text-align:right;'
             'font-family:JetBrains Mono,monospace;font-size:13px;font-weight:700;'
-            f'color:{color};">{previo:.1f}%</div>'
+            f'color:{color};">{valor:.1f}%</div>'
             "</div>"
         )
 
@@ -1092,7 +1093,7 @@ def html_barras_metricas(metricas, metricas_prev=None):
     )
 
     return f"""
-<div style="background:rgba(148,163,184,0.06);border:1px solid rgba(148,163,184,0.18);
+<div id="{uid}" style="background:rgba(148,163,184,0.06);border:1px solid rgba(148,163,184,0.18);
 border-radius:14px;padding:14px 18px;"
 data-prev="{datos_prev}" data-curr="{datos_curr}">
   <div style="display:flex;justify-content:space-between;align-items:center;
@@ -1109,15 +1110,17 @@ data-prev="{datos_prev}" data-curr="{datos_curr}">
 </div>
 <script>
 (function(){{
-  var el = document.currentScript.previousElementSibling;
-  var prev = el.dataset.prev.split(',').map(Number);
-  var curr = el.dataset.curr.split(',').map(Number);
+  var el = document.getElementById("{uid}");
+  if (!el) return;
+  var prev = el.getAttribute('data-prev').split(',').map(Number);
+  var curr = el.getAttribute('data-curr').split(',').map(Number);
   var bars = el.querySelectorAll('.am-bar');
   var vals = el.querySelectorAll('.am-val');
   bars.forEach(function(b, i) {{
     b.style.transition = 'none';
     b.style.width = prev[i] + '%';
   }});
+  vals.forEach(function(v, i) {{ v.textContent = prev[i].toFixed(1) + '%'; }});
   requestAnimationFrame(function() {{
     requestAnimationFrame(function() {{
       bars.forEach(function(b, i) {{
@@ -1148,6 +1151,7 @@ def html_evolucion_animada(df_historial):
 
     ciclos = df_historial["Ciclo"].astype(int).tolist()
     n = len(ciclos)
+    uid = f"am-evo-{id(df_historial)}"
 
     W, H = 640, 320
     izq, der, sup, inf = 46, 16, 16, 34
@@ -1193,15 +1197,12 @@ def html_evolucion_animada(df_historial):
         lineas.append(
             f'<polyline class="am-line" points="{pts}" fill="none" '
             f'stroke="{color}" stroke-width="2.6" stroke-linecap="round" '
-            'stroke-linejoin="round" style="stroke-dasharray:2000;'
-            'stroke-dashoffset:2000;transition:stroke-dashoffset 1.15s '
-            'cubic-bezier(.4,0,.2,1) .1s;"/>'
+            'stroke-linejoin="round"/>'
         )
         for i, v in enumerate(valores):
             puntos.append(
                 f'<circle class="am-pt" cx="{px_x(i):.1f}" cy="{px_y(v):.1f}" '
-                f'r="4.5" fill="{color}" stroke="#0b1020" stroke-width="1.6" '
-                f'style="animation-delay:{0.55 + i * 0.12:.2f}s"/>'
+                f'r="4.5" fill="{color}" stroke="#0b1020" stroke-width="1.6"/>'
             )
 
     leyenda = "".join(
@@ -1214,7 +1215,7 @@ def html_evolucion_animada(df_historial):
     )
 
     return f"""
-<div style="background:rgba(148,163,184,0.06);border:1px solid rgba(148,163,184,0.18);
+<div id="{uid}" style="background:rgba(148,163,184,0.06);border:1px solid rgba(148,163,184,0.18);
 border-radius:14px;padding:14px 18px;">
   <div style="color:#f1f5f9;font-weight:800;font-size:14.5px;margin-bottom:6px;">
     Evolución del refinamiento
@@ -1229,19 +1230,28 @@ border-radius:14px;padding:14px 18px;">
 </div>
 <script>
 (function(){{
-  var el = document.currentScript.previousElementSibling;
+  var el = document.getElementById("{uid}");
+  if (!el) return;
   var st = document.createElement('style');
   st.textContent =
     '@keyframes amPop{{0%{{transform:scale(0);opacity:0}}' +
     '60%{{transform:scale(1.4);opacity:1}}100%{{transform:scale(1);opacity:1}}}}' +
-    '.am-pt{{transform-box:fill-box;transform-origin:center;' +
-    'animation:amPop .5s cubic-bezier(.34,1.56,.64,1) both;}}';
+    '.am-pt{{transform-box:fill-box;transform-origin:center;}}';
   document.head.appendChild(st);
+  var lines = el.querySelectorAll('.am-line');
+  lines.forEach(function(l) {{
+    l.style.strokeDasharray = '2000';
+    l.style.strokeDashoffset = '2000';
+    l.style.transition = 'stroke-dashoffset 1.15s cubic-bezier(.4,0,.2,1) .1s';
+  }});
+  var pts = el.querySelectorAll('.am-pt');
+  pts.forEach(function(c, i) {{
+    c.style.animation = 'amPop .5s cubic-bezier(.34,1.56,.64,1) ' +
+      (0.5 + i * 0.12) + 's both';
+  }});
   requestAnimationFrame(function() {{
     requestAnimationFrame(function() {{
-      el.querySelectorAll('.am-line').forEach(function(l) {{
-        l.style.strokeDashoffset = '0';
-      }});
+      lines.forEach(function(l) {{ l.style.strokeDashoffset = '0'; }});
     }});
   }});
 }})();
@@ -1258,10 +1268,10 @@ border-radius:14px;padding:14px 18px;">
 # quejas; la mediación y la conciliación son minoritarias. Se muestrean
 # en rangos para que cada ejecución varíe sin salir de lo plausible.
 RANGOS_TIPOS = {
-    "Asesoría": (0.50, 0.60),
-    "Queja": (0.25, 0.32),
-    "Solicitud de Mediación": (0.08, 0.12),
-    "Solicitud de Conciliación": (0.03, 0.06),
+    "Asesoría": (0.45, 0.52),
+    "Queja": (0.27, 0.32),
+    "Solicitud de Mediación": (0.11, 0.15),
+    "Solicitud de Conciliación": (0.06, 0.10),
 }
 
 
