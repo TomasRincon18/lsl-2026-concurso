@@ -1253,8 +1253,31 @@ border-radius:14px;padding:14px 18px;">
 # GENERACIÓN DE PQRSD
 # ==========================================================
 
-def generar_pqrsd(contador, ts):
-    tipo = np.random.choice(TIPOS, p=[0.30, 0.30, 0.20, 0.20])
+# Distribución realista de tipos en la Defensoría del Pueblo (URAB):
+# las asesorías (orientación jurídica) son la mayoría, seguidas de las
+# quejas; la mediación y la conciliación son minoritarias. Se muestrean
+# en rangos para que cada ejecución varíe sin salir de lo plausible.
+RANGOS_TIPOS = {
+    "Asesoría": (0.50, 0.60),
+    "Queja": (0.25, 0.32),
+    "Solicitud de Mediación": (0.08, 0.12),
+    "Solicitud de Conciliación": (0.03, 0.06),
+}
+
+
+def pesos_tipos():
+    """Muestrea proporciones por tipo dentro de rangos realistas y
+    las normaliza a 1, de modo que cada jornada sea distinta."""
+    crudas = {
+        tipo: np.random.uniform(*rango)
+        for tipo, rango in RANGOS_TIPOS.items()
+    }
+    total = sum(crudas.values())
+    return [crudas[tipo] / total for tipo in TIPOS]
+
+
+def generar_pqrsd(contador, ts, pesos):
+    tipo = np.random.choice(TIPOS, p=pesos)
     tema = np.random.choice(TEMAS)
     canal = np.random.choice(CANALES, p=[0.55, 0.45])
     urgente = np.random.random() < 0.08
@@ -1489,6 +1512,7 @@ with tab_recepcion:
         feed = []
         contador = 0
         hora_actual = datetime(2026, 1, 5, 8, 0)
+        pesos = pesos_tipos()
 
         while contador < total_recibir:
             lote = min(lote_por_paso, total_recibir - contador)
@@ -1497,7 +1521,7 @@ with tab_recepcion:
                 hora_actual = hora_actual + timedelta(
                     minutes=int(np.random.randint(1, 9))
                 )
-                nueva = generar_pqrsd(contador + 1, hora_actual)
+                nueva = generar_pqrsd(contador + 1, hora_actual, pesos)
                 recibidas.append(nueva)
                 feed.insert(0, nueva)
                 contador += 1
