@@ -1444,10 +1444,10 @@ st.markdown(
 # PESTAÑAS
 # ==========================================================
 
-tab_recepcion, tab_simulacion, tab_resultados = st.tabs([
-    "📥 Recepción de PQRSD",
+tab_simulacion, tab_resultados, tab_recepcion = st.tabs([
     "🎛️ Simulación en vivo",
     "📊 Resultados",
+    "📥 Recepción de PQRSD",
 ])
 
 
@@ -1569,7 +1569,7 @@ with tab_recepcion:
                 text=f"Radicando PQRSD... {contador} de {total_recibir}",
             )
 
-            time.sleep(velocidad_recepcion)
+            time.sleep(max(0.02, 1.2 - velocidad_recepcion))
 
         st.session_state.recepcion_df = df_parcial
         st.success(
