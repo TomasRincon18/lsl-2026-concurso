@@ -54,10 +54,10 @@
       try {
         stlite.mount(
           {
-            entrypoint: "app.py",
+            entrypoint: "streamlit_app.py",
             requirements: ["numpy", "pandas", "plotly"],
             files: {
-              "app.py": { url: "./app.py" },
+              "streamlit_app.py": { url: "./streamlit_app.py" },
             },
             streamlitConfig: {
               "theme.base": "dark",
