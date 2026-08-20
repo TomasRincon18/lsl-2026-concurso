@@ -206,3 +206,69 @@ más regionales con datos reales en la mano.
 - **MLOps:** la disciplina de mantener el modelo sano en producción (medir,
   monitorear drift, reentrenar).
 - **SLA:** compromiso formal de tiempo/servicio (ej.: asignar en ≤ 4 h).
+
+---
+
+## 8. Preguntas técnicas frecuentes (FAQ)
+
+> Respuestas rápidas a las dudas técnicas más comunes, en lenguaje humano.
+
+**¿Qué es el drift en producción?**
+El mundo cambia y el modelo deja de reconocer lo que antes reconocía bien. Se
+vigila con un semáforo (verde/amarillo/naranja/rojo). *(Detalle en la sección 1.)*
+
+**¿Por qué el drift sube periodo a periodo en la gráfica?**
+Es una rampa lineal intencional: cuanto más tiempo corre el modelo en producción
+sin reentrenarse, más se acumula la deriva. Son **periodos de producción**, no
+ciclos de refinamiento.
+
+**¿Qué pasa cuando la versión no se promueve a producción?**
+No se escala: vuelve al ciclo de refinamiento hasta cumplir las metas de calidad
+y de equidad. No se arriesga nada en producción.
+
+**¿Qué decisiones se toman con datos de baja calidad?**
+El validador pide la información que falta, se mejora OCR/NER, se etiqueta más
+conjunto gold, se aplica el umbral asimétrico, y se arranca con un subconjunto
+limpio en lugar de meter datos sucios al modelo.
+
+**¿Las categorías jurídicas son solo 4?**
+Sí: Asesoría, Queja, Solicitud de Mediación y Solicitud de Conciliación. La
+palabra "PQRSD" es la taxonomía administrativa genérica (5 tipos); dentro de la
+Defensoría todo se reclasifica en esas 4, más ~12 sub-temas y urgencia 1–5.
+
+**¿Todos los casos los revisa un profesional en el refinamiento?**
+No el 100%. Se automatiza lo de alta confianza y se revisa **todo lo importante**:
+baja confianza, riesgo vital y las decisiones de fondo. *(Detalle en la sección 5.)*
+
+**¿Qué hace el simulador?**
+Reproduce el ciclo de vida de la solución —datos → entrenar → refinar → validar →
+desplegar → monitorear— de forma visual e interactiva.
+
+**¿El simulador entrena un modelo de verdad?**
+No. Usa números aleatorios dentro de rangos realistas. El **proceso** que se ve es
+el real; las **cifras** son de ejemplo.
+
+**¿Cuál es el producto final del modelo?**
+No es solo clasificar. Es llevar cada PQRSD de la recepción hasta una respuesta
+oportuna y trazable, con el profesional decidiendo en cada paso.
+
+**¿La respuesta al ciudadano la da solo el profesional?**
+La de fondo, sí: M6 hace el borrador y el profesional revisa, edita y firma. Lo
+administrativo (acuses y plantillas de consultas simples) se automatiza con
+plantillas ya aprobadas por Derecho.
+
+**¿Cuándo acaba la simulación, las PQRS ya están listas?**
+Sí: el modelo cumplió sus metas (y la equidad) y está desplegado. Las PQRS nuevas
+salen bien clasificadas y priorizadas, listas para que el profesional las resuelva.
+
+**¿Qué datos da M5 (historial)?**
+Por número de cédula: radicados, fechas, tipos, estados, profesionales asignados
+y respuestas previas, en menos de 500 ms.
+
+**¿Qué papel tienen IRIS y VisionWeb?**
+Son los dos sistemas de gestión que hoy no se comunican. La solución escribe una
+sola vez y **M7** los sincroniza, eliminando la doble digitación.
+
+**¿Por qué la recepción no muestra la asignación (M3)?**
+Porque la recepción modela solo el ingreso (M1, radicado). M3 (asignación) ocurre
+después, una vez el caso está clasificado y validado por un profesional.
