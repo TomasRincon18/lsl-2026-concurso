@@ -1049,9 +1049,10 @@ def fig_produccion(df_prod):
 # GRÁFICAS ANIMADAS (HTML + JS NATIVO, SIN DEPENDENCIAS)
 # ==========================================================
 
-def html_barras_metricas(metricas, metricas_prev=None):
-    """Barras de resultado vs. meta con animación: transición suave
-    desde el estado anterior y conteo numérico al cambiar de ciclo."""
+def html_barras_metricas(metricas, metricas_prev=None, animar=True):
+    """Barras de resultado vs. meta. Si `animar` es True, transiciona
+    suavemente desde el estado anterior con conteo numérico; si es False,
+    se dibuja el estado final sin animación (para re-render sin parpadeo)."""
 
     nombres = list(UMBRALES.keys())
     uid = f"am-bars-{id(metricas)}"
@@ -1092,22 +1093,7 @@ def html_barras_metricas(metricas, metricas_prev=None):
         for n in nombres
     )
 
-    return f"""
-<div id="{uid}" style="background:rgba(148,163,184,0.06);border:1px solid rgba(148,163,184,0.18);
-border-radius:14px;padding:14px 18px;"
-data-prev="{datos_prev}" data-curr="{datos_curr}">
-  <div style="display:flex;justify-content:space-between;align-items:center;
-  flex-wrap:wrap;gap:6px;margin-bottom:8px;">
-    <div style="color:#f1f5f9;font-weight:800;font-size:14.5px;">
-      Resultado vs. meta por componente
-    </div>
-    <div style="display:flex;align-items:center;gap:6px;color:#94a3b8;font-size:11px;">
-      <span style="display:inline-block;width:14px;height:2px;
-      background:rgba(248,250,252,0.55);"></span> meta mínima
-    </div>
-  </div>
-  {''.join(filas)}
-</div>
+    script = f"""
 <script>
 (function(){{
   var el = document.getElementById("{uid}");
@@ -1142,12 +1128,30 @@ data-prev="{datos_prev}" data-curr="{datos_curr}">
   }});
 }})();
 </script>
-"""
+""" if animar else ""
+
+    return f"""
+<div id="{uid}" style="background:rgba(148,163,184,0.06);border:1px solid rgba(148,163,184,0.18);
+border-radius:14px;padding:14px 18px;"
+data-prev="{datos_prev}" data-curr="{datos_curr}">
+  <div style="display:flex;justify-content:space-between;align-items:center;
+  flex-wrap:wrap;gap:6px;margin-bottom:8px;">
+    <div style="color:#f1f5f9;font-weight:800;font-size:14.5px;">
+      Resultado vs. meta por componente
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;color:#94a3b8;font-size:11px;">
+      <span style="display:inline-block;width:14px;height:2px;
+      background:rgba(248,250,252,0.55);"></span> meta mínima
+    </div>
+  </div>
+  {''.join(filas)}
+</div>
+{script}"""
 
 
-def html_evolucion_animada(df_historial):
-    """Líneas de evolución con animación de trazo: la línea se dibuja
-    sola y los puntos aparecen en cascada al cambiar de ciclo."""
+def html_evolucion_animada(df_historial, animar=True):
+    """Líneas de evolución. Si `animar` es True, la línea se dibuja sola y los
+    puntos aparecen en cascada; si es False, se muestra el estado final estático."""
 
     ciclos = df_historial["Ciclo"].astype(int).tolist()
     n = len(ciclos)
@@ -1214,20 +1218,7 @@ def html_evolucion_animada(df_historial):
         for nombre in UMBRALES
     )
 
-    return f"""
-<div id="{uid}" style="background:rgba(148,163,184,0.06);border:1px solid rgba(148,163,184,0.18);
-border-radius:14px;padding:14px 18px;">
-  <div style="color:#f1f5f9;font-weight:800;font-size:14.5px;margin-bottom:6px;">
-    Evolución del refinamiento
-  </div>
-  <svg viewBox="0 0 {W} {H}" style="width:100%;height:auto;display:block;">
-    {''.join(cuadricula)}
-    {etiquetas_x}
-    {''.join(lineas)}
-    {''.join(puntos)}
-  </svg>
-  <div style="margin-top:6px;">{leyenda}</div>
-</div>
+    script = f"""
 <script>
 (function(){{
   var el = document.getElementById("{uid}");
@@ -1256,7 +1247,23 @@ border-radius:14px;padding:14px 18px;">
   }});
 }})();
 </script>
-"""
+""" if animar else ""
+
+    return f"""
+<div id="{uid}" style="background:rgba(148,163,184,0.06);border:1px solid rgba(148,163,184,0.18);
+border-radius:14px;padding:14px 18px;">
+  <div style="color:#f1f5f9;font-weight:800;font-size:14.5px;margin-bottom:6px;">
+    Evolución del refinamiento
+  </div>
+  <svg viewBox="0 0 {W} {H}" style="width:100%;height:auto;display:block;">
+    {''.join(cuadricula)}
+    {etiquetas_x}
+    {''.join(lineas)}
+    {''.join(puntos)}
+  </svg>
+  <div style="margin-top:6px;">{leyenda}</div>
+</div>
+{script}"""
 
 
 # ==========================================================
@@ -1624,6 +1631,234 @@ with tab_recepcion:
 
 
 # ==========================================================
+# SIMULACIÓN: GENERADOR DE FRAMES Y RENDER
+# ==========================================================
+
+def generar_simulacion(num_pqrsd, calidad_datos, iteraciones_max, nivel_deriva, duracion):
+    """Generador de frames de la simulación. Cada `yield` produce un dict con
+    el estado a mostrar; el driver lo renderiza y duerme `duerme` segundos."""
+
+    np.random.seed()
+
+    etapas_estimadas = 12 + iteraciones_max * 4
+    tiempo_por_evento = duracion / etapas_estimadas
+
+    historial = []
+    desplegado = False
+    necesita_reentrenamiento = False
+    feedback_acumulado = 0
+    pqrsd_validas = 0
+
+    def frame(tipo, texto, etapa, progreso=None, texto_barra=None,
+              metricas=None, metricas_prev=None, historial_frame=None,
+              duerme=0.0, final=False, resultado=None):
+        return {
+            "tipo": tipo,
+            "texto": texto,
+            "etapa": etapa,
+            "progreso": progreso,
+            "texto_barra": texto_barra,
+            "metricas": metricas,
+            "metricas_prev": metricas_prev,
+            "historial": historial_frame,
+            "duerme": duerme,
+            "final": final,
+            "resultado": resultado,
+        }
+
+    # 1. Datos históricos
+    yield frame("info", "📥 Recuperando PQRSD históricas desde IRIS y VisionWeb...",
+                "datos", 5, "Recuperando datos históricos", duerme=tiempo_por_evento)
+
+    # 2. Preparación
+    pqrsd_validas = int(num_pqrsd * calidad_datos)
+    yield frame("info", "🧹 Consolidando, depurando y preparando los datos...",
+                "preparacion", 12, f"Datos aptos: {pqrsd_validas:,} de {num_pqrsd:,}",
+                duerme=tiempo_por_evento)
+
+    # 3. Adaptación de modelos
+    metricas = simular_metricas_iniciales(calidad_datos)
+    metricas_prev = None
+    yield frame("info", "🧠 Adaptando los modelos de IA al contexto de la URAB...",
+                "modelos", 20, "Modelos adaptados",
+                metricas=metricas, metricas_prev=metricas_prev,
+                duerme=tiempo_por_evento)
+
+    # 4. Ciclos de refinamiento
+    for ciclo in range(1, iteraciones_max + 1):
+
+        yield frame("warning", f"🔬 Ciclo {ciclo}: evaluando desempeño de los modelos...",
+                    "evaluacion", duerme=tiempo_por_evento)
+
+        yield frame("warning", f"⚙️ Ciclo {ciclo}: ejecutando refinamiento...",
+                    "refinamiento", duerme=tiempo_por_evento)
+
+        promedio = np.mean(list(metricas.values()))
+        errores_estimados = int(pqrsd_validas * (1 - promedio))
+        correcciones = int(errores_estimados * np.random.uniform(0.65, 0.90))
+        feedback_acumulado += correcciones / max(pqrsd_validas, 1)
+
+        yield frame("warning", f"👤 Ciclo {ciclo}: profesionales URAB validando resultados...",
+                    "human", duerme=tiempo_por_evento)
+
+        registro = {"Ciclo": ciclo}
+        for k, v in metricas.items():
+            registro[k] = round(v * 100, 2)
+        registro["Correcciones profesionales"] = correcciones
+        historial.append(registro)
+
+        progreso_actual = min(20 + int(ciclo / iteraciones_max * 50), 70)
+
+        yield frame("warning", f"🎯 Ciclo {ciclo}: verificando criterios de aceptación...",
+                    "criterios", progreso_actual, f"Ciclo {ciclo} de {iteraciones_max}",
+                    metricas=metricas, metricas_prev=metricas_prev,
+                    historial_frame=list(historial),
+                    duerme=tiempo_por_evento)
+
+        metricas_prev = metricas.copy()
+
+        if cumple_criterios(metricas):
+            desplegado = True
+            yield frame("success", f"✅ Ciclo {ciclo}: criterios de aceptación alcanzados.",
+                        "criterios", duerme=tiempo_por_evento)
+            break
+
+        metricas = refinar_modelos(metricas, feedback_acumulado)
+
+    # 5. Despliegue y producción
+    produccion = []
+
+    if desplegado:
+
+        yield frame("success", "🚀 Desplegando modelos y agentes en producción...",
+                    "deploy", 75, "Despliegue en curso", duerme=tiempo_por_evento)
+
+        yield frame("success", "🔗 Activando interoperabilidad con IRIS y VisionWeb...",
+                    "integracion", 80, "Interoperabilidad activa", duerme=tiempo_por_evento)
+
+        yield frame("success", "📨 Solución operando sobre nuevas PQRSD...",
+                    "operacion", 85, "Operando PQRSD", duerme=tiempo_por_evento)
+
+        # Operaciones de ML: los 6 periodos de drift se agrupan en un solo frame.
+        yield frame("info", "📡 Operaciones de ML monitoreando desempeño y drift...",
+                    "mlops", duerme=tiempo_por_evento / 2 * 6)
+
+        metricas_prod = metricas.copy()
+
+        for periodo in range(1, 7):
+            deriva_periodo = nivel_deriva * periodo / 6
+            ruido = np.random.uniform(0.001, 0.008)
+
+            exactitud_prod = limitar_componente(
+                "M2 Exactitud",
+                metricas_prod["M2 Exactitud"] - deriva_periodo - ruido,
+            )
+            aceptacion_prod = limitar_componente(
+                "M6 Aceptación",
+                metricas_prod["M6 Aceptación"] - deriva_periodo * 0.70,
+            )
+            produccion.append({
+                "Periodo": periodo,
+                "M2 Exactitud": round(exactitud_prod * 100, 2),
+                "M6 Aceptación": round(aceptacion_prod * 100, 2),
+                "Drift": round(deriva_periodo * 100, 2),
+            })
+
+        ultimo = produccion[-1]
+
+        if (
+            ultimo["M2 Exactitud"] < UMBRALES["M2 Exactitud"] * 100
+            or ultimo["M6 Aceptación"] < UMBRALES["M6 Aceptación"] * 100
+            or ultimo["Drift"] > 10
+        ):
+            necesita_reentrenamiento = True
+
+        yield frame("info", "🔄 Incorporando retroalimentación profesional y nuevos datos...",
+                    "feedback", 92, "Monitoreo activo", duerme=tiempo_por_evento)
+
+    else:
+        yield frame("error", "❌ No se alcanzaron todos los criterios. "
+                    "La versión no será promovida a producción.",
+                    "criterios", duerme=tiempo_por_evento)
+
+    # 6. Finalización
+    yield frame(
+        "success" if desplegado else "error",
+        ("✅ Simulación finalizada: la solución fue desplegada y monitoreada."
+         if desplegado
+         else "❌ Simulación finalizada: no se alcanzaron los criterios de aceptación."),
+        "feedback" if desplegado else "criterios",
+        100, "Simulación finalizada",
+        final=True,
+        resultado={
+            "metricas": metricas,
+            "historial": historial,
+            "desplegado": desplegado,
+            "produccion": produccion,
+            "retraining": necesita_reentrenamiento,
+            "validas": pqrsd_validas,
+            "rechazadas": num_pqrsd - pqrsd_validas,
+            "num_pqrsd": num_pqrsd,
+        },
+    )
+
+
+def render_frame(frame, vis, estado_texto, grafico_dinamico, pista_dinamica,
+                 barra_progreso, metricas_dinamicas, evolucion_dinamica):
+    """Renderiza un frame de la simulación en los contenedores dinámicos."""
+
+    metodos = {
+        "info": estado_texto.info,
+        "warning": estado_texto.warning,
+        "success": estado_texto.success,
+        "error": estado_texto.error,
+    }
+    metodos[frame["tipo"]](frame["texto"])
+
+    grafico_dinamico.graphviz_chart(
+        construir_diagrama(frame["etapa"]),
+        width="stretch",
+    )
+    pista_dinamica.markdown(
+        html_pista_pipeline(frame["etapa"]),
+        unsafe_allow_html=True,
+    )
+
+    if frame["progreso"] is not None:
+        barra_progreso.progress(frame["progreso"], text=frame["texto_barra"])
+
+    if frame["metricas"] is not None:
+        vis["metricas"] = frame["metricas"]
+        vis["metricas_prev"] = frame["metricas_prev"]
+        vis["animar_metricas"] = True
+
+    if vis.get("metricas") is not None:
+        metricas_dinamicas.html(
+            html_barras_metricas(
+                vis["metricas"],
+                vis.get("metricas_prev"),
+                animar=vis.get("animar_metricas", False),
+            ),
+            unsafe_allow_javascript=True,
+        )
+        vis["animar_metricas"] = False
+
+    if frame["historial"] is not None:
+        vis["historial"] = frame["historial"]
+        vis["animar_evolucion"] = True
+
+    if vis.get("historial") is not None:
+        evolucion_dinamica.html(
+            html_evolucion_animada(
+                pd.DataFrame(vis["historial"]),
+                animar=vis.get("animar_evolucion", False),
+            ),
+            unsafe_allow_javascript=True,
+        )
+        vis["animar_evolucion"] = False
+
+
+# ==========================================================
 # TAB 2 · SIMULACIÓN EN VIVO
 # ==========================================================
 
@@ -1700,7 +1935,28 @@ with tab_simulacion:
     with col_reiniciar:
         if st.button("🔄 Reiniciar simulación", key="btn_sim_reset"):
             st.session_state.sim_resultado = None
+            st.session_state.sim_estado = None
             st.rerun()
+
+    sim = st.session_state.get("sim_estado")
+
+    if sim and sim.get("activa"):
+        c_pausa, c_reanudar, c_terminar = st.columns(3)
+
+        with c_pausa:
+            if st.button("⏸ Pausar", key="btn_pausa", use_container_width=True):
+                sim["pausada"] = True
+                st.rerun()
+
+        with c_reanudar:
+            if st.button("▶ Reanudar", key="btn_reanudar", use_container_width=True):
+                sim["pausada"] = False
+                st.rerun()
+
+        with c_terminar:
+            if st.button("⏹ Terminar", key="btn_terminar", use_container_width=True):
+                st.session_state.sim_estado = None
+                st.rerun()
 
     st.divider()
 
@@ -1712,199 +1968,50 @@ with tab_simulacion:
     evolucion_dinamica = st.empty()
 
     if ejecutar:
-
-        np.random.seed()
-
-        etapas_estimadas = 12 + iteraciones_max * 4
-        tiempo_por_evento = duracion_simulacion / etapas_estimadas
-
-        historial = []
-        desplegado = False
-        necesita_reentrenamiento = False
-        feedback_acumulado = 0
-        pqrsd_validas = 0
-
-        def pintar_etapa(etapa, progreso=None, texto_barra=None):
-            grafico_dinamico.graphviz_chart(
-                construir_diagrama(etapa),
-                width="stretch",
-            )
-            pista_dinamica.markdown(
-                html_pista_pipeline(etapa),
-                unsafe_allow_html=True,
-            )
-            if progreso is not None:
-                barra_progreso.progress(progreso, text=texto_barra)
-
-        # 1. Datos históricos
-        estado_texto.info("📥 Recuperando PQRSD históricas desde IRIS y VisionWeb...")
-        pintar_etapa("datos", 5, "Recuperando datos históricos")
-        time.sleep(tiempo_por_evento)
-
-        # 2. Preparación
-        estado_texto.info("🧹 Consolidando, depurando y preparando los datos...")
-        pintar_etapa("preparacion", 12, "Preparando datos")
-        pqrsd_validas = int(num_pqrsd * calidad_datos)
-        barra_progreso.progress(12, text=f"Datos aptos: {pqrsd_validas:,} de {num_pqrsd:,}")
-        time.sleep(tiempo_por_evento)
-
-        # 3. Adaptación de modelos
-        estado_texto.info("🧠 Adaptando los modelos de IA al contexto de la URAB...")
-        pintar_etapa("modelos", 20, "Modelos adaptados")
-        metricas = simular_metricas_iniciales(calidad_datos)
-        metricas_prev = None
-        metricas_dinamicas.html(
-            html_barras_metricas(metricas, metricas_prev),
-            unsafe_allow_javascript=True,
-        )
-        time.sleep(tiempo_por_evento)
-
-        # 4. Ciclos de refinamiento
-        for ciclo in range(1, iteraciones_max + 1):
-
-            estado_texto.warning(f"🔬 Ciclo {ciclo}: evaluando desempeño de los modelos...")
-            pintar_etapa("evaluacion")
-            time.sleep(tiempo_por_evento)
-
-            estado_texto.warning(f"⚙️ Ciclo {ciclo}: ejecutando refinamiento...")
-            pintar_etapa("refinamiento")
-            time.sleep(tiempo_por_evento)
-
-            estado_texto.warning(f"👤 Ciclo {ciclo}: profesionales URAB validando resultados...")
-            pintar_etapa("human")
-
-            promedio = np.mean(list(metricas.values()))
-            errores_estimados = int(pqrsd_validas * (1 - promedio))
-            correcciones = int(
-                errores_estimados * np.random.uniform(0.65, 0.90)
-            )
-            feedback_acumulado += correcciones / max(pqrsd_validas, 1)
-            time.sleep(tiempo_por_evento)
-
-            estado_texto.warning(f"🎯 Ciclo {ciclo}: verificando criterios de aceptación...")
-            pintar_etapa("criterios")
-
-            registro = {"Ciclo": ciclo}
-            for k, v in metricas.items():
-                registro[k] = round(v * 100, 2)
-            registro["Correcciones profesionales"] = correcciones
-            historial.append(registro)
-
-            df_hist_parcial = pd.DataFrame(historial)
-
-            metricas_dinamicas.html(
-                html_barras_metricas(metricas, metricas_prev),
-                unsafe_allow_javascript=True,
-            )
-
-            evolucion_dinamica.html(
-                html_evolucion_animada(df_hist_parcial),
-                unsafe_allow_javascript=True,
-            )
-
-            metricas_prev = metricas.copy()
-
-            progreso_actual = min(20 + int(ciclo / iteraciones_max * 50), 70)
-            barra_progreso.progress(
-                progreso_actual,
-                text=f"Ciclo {ciclo} de {iteraciones_max}",
-            )
-            time.sleep(tiempo_por_evento)
-
-            if cumple_criterios(metricas):
-                desplegado = True
-                estado_texto.success(
-                    f"✅ Ciclo {ciclo}: criterios de aceptación alcanzados."
-                )
-                break
-
-            metricas = refinar_modelos(metricas, feedback_acumulado)
-
-        # 5. Despliegue y producción
-        produccion = []
-
-        if desplegado:
-
-            estado_texto.success("🚀 Desplegando modelos y agentes en producción...")
-            pintar_etapa("deploy", 75, "Despliegue en curso")
-            time.sleep(tiempo_por_evento)
-
-            estado_texto.success("🔗 Activando interoperabilidad con IRIS y VisionWeb...")
-            pintar_etapa("integracion", 80, "Interoperabilidad activa")
-            time.sleep(tiempo_por_evento)
-
-            estado_texto.success("📨 Solución operando sobre nuevas PQRSD...")
-            pintar_etapa("operacion", 85, "Operando PQRSD")
-            time.sleep(tiempo_por_evento)
-
-            estado_texto.info("📡 Operaciones de ML monitoreando desempeño y drift...")
-            pintar_etapa("mlops")
-
-            metricas_prod = metricas.copy()
-
-            for periodo in range(1, 7):
-                deriva_periodo = nivel_deriva * periodo / 6
-                ruido = np.random.uniform(0.001, 0.008)
-
-                exactitud_prod = limitar_componente(
-                    "M2 Exactitud",
-                    metricas_prod["M2 Exactitud"] - deriva_periodo - ruido,
-                )
-
-                aceptacion_prod = limitar_componente(
-                    "M6 Aceptación",
-                    metricas_prod["M6 Aceptación"] - deriva_periodo * 0.70,
-                )
-
-                produccion.append({
-                    "Periodo": periodo,
-                    "M2 Exactitud": round(exactitud_prod * 100, 2),
-                    "M6 Aceptación": round(aceptacion_prod * 100, 2),
-                    "Drift": round(deriva_periodo * 100, 2),
-                })
-
-                time.sleep(tiempo_por_evento / 2)
-
-            ultimo = produccion[-1]
-
-            if (
-                ultimo["M2 Exactitud"] < UMBRALES["M2 Exactitud"] * 100
-                or ultimo["M6 Aceptación"] < UMBRALES["M6 Aceptación"] * 100
-                or ultimo["Drift"] > 10
-            ):
-                necesita_reentrenamiento = True
-
-            barra_progreso.progress(92, text="Monitoreo activo")
-
-            estado_texto.info("🔄 Incorporando retroalimentación profesional y nuevos datos...")
-            pintar_etapa("feedback")
-            time.sleep(tiempo_por_evento)
-
-        else:
-            estado_texto.error(
-                "❌ No se alcanzaron todos los criterios. "
-                "La versión no será promovida a producción."
-            )
-
-        barra_progreso.progress(100, text="Simulación finalizada")
-
-        if desplegado:
-            estado_texto.success(
-                "✅ Simulación finalizada: la solución fue desplegada y monitoreada."
-            )
-
-        pintar_etapa("feedback" if desplegado else "criterios")
-
-        st.session_state.sim_resultado = {
-            "metricas": metricas,
-            "historial": historial,
-            "desplegado": desplegado,
-            "produccion": produccion,
-            "retraining": necesita_reentrenamiento,
-            "validas": pqrsd_validas,
-            "rechazadas": num_pqrsd - pqrsd_validas,
-            "num_pqrsd": num_pqrsd,
+        st.session_state.sim_estado = {
+            "gen": generar_simulacion(
+                num_pqrsd, calidad_datos, iteraciones_max,
+                nivel_deriva, duracion_simulacion,
+            ),
+            "pausada": False,
+            "activa": True,
+            "frame": None,
+            "vis": {},
         }
+        sim = st.session_state.sim_estado
+
+    if sim and sim.get("activa"):
+        if sim.get("pausada"):
+            if sim.get("frame") is not None:
+                f_pausa = dict(sim["frame"])
+                f_pausa["metricas"] = None
+                f_pausa["historial"] = None
+                render_frame(
+                    f_pausa, sim["vis"], estado_texto, grafico_dinamico,
+                    pista_dinamica, barra_progreso, metricas_dinamicas,
+                    evolucion_dinamica,
+                )
+            st.caption("⏸ Simulación en pausa — pulsa ▶ Reanudar para continuar.")
+        else:
+            try:
+                frame = next(sim["gen"])
+            except StopIteration:
+                frame = None
+
+            if frame is not None:
+                render_frame(
+                    frame, sim["vis"], estado_texto, grafico_dinamico,
+                    pista_dinamica, barra_progreso, metricas_dinamicas,
+                    evolucion_dinamica,
+                )
+                sim["frame"] = frame
+
+                if frame["final"]:
+                    st.session_state.sim_resultado = frame["resultado"]
+                    st.session_state.sim_estado = None
+                else:
+                    time.sleep(frame["duerme"])
+                    st.rerun()
 
 
 # ==========================================================
