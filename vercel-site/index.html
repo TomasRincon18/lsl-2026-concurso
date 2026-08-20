@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>URAB IA · LSL 2026</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: linear-gradient(160deg, #0b1020 0%, #0f172a 55%, #0b1020 100%);
+      font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      color: #e2e8f0;
+    }
+    #root { min-height: 100vh; }
+    #loading {
+      position: fixed; inset: 0; z-index: 999;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 18px; background: #0b1020; transition: opacity .6s ease;
+    }
+    #loading.gone { opacity: 0; pointer-events: none; }
+    .spinner {
+      width: 56px; height: 56px; border-radius: 50%;
+      border: 4px solid rgba(34,211,238,.15); border-top-color: #22d3ee;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .brand { font-weight: 900; font-size: 1.4rem; letter-spacing: 1px; }
+    .brand span { background: linear-gradient(90deg,#22d3ee,#8b5cf6); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .sub { color: #94a3b8; font-size: .85rem; max-width: 420px; text-align: center; padding: 0 20px; }
+    .steps { color: #64748b; font-size: .75rem; max-width: 460px; text-align: center; padding: 0 20px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <div id="loading">
+    <div class="spinner"></div>
+    <div class="brand">URAB <span>IA</span></div>
+    <div class="sub">Cargando la simulación en tu navegador (WebAssembly)...</div>
+    <div class="steps">
+      El primer arranque descarga el intérprete de Python y las librerías
+      (numpy, pandas, plotly) y las ejecuta localmente. Tarda unos segundos.
+      La app corre 100% en tu navegador; no se envían datos a ningún servidor.
+    </div>
+  </div>
+  <div id="root"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@stlite/browser@1.8.1/build/stlite.js"></script>
+  <script>
+    (async function () {
+      const root = document.getElementById("root");
+      const loading = document.getElementById("loading");
+
+      try {
+        stlite.mount(
+          {
+            entrypoint: "app.py",
+            requirements: ["numpy", "pandas", "plotly"],
+            files: {
+              "app.py": { url: "./app.py" },
+            },
+            streamlitConfig: {
+              "theme.base": "dark",
+              "theme.primaryColor": "#22d3ee",
+              "theme.backgroundColor": "#0b1020",
+              "theme.secondaryBackgroundColor": "#111827",
+              "theme.textColor": "#e2e8f0",
+              "theme.font": "sans serif",
+              "browser.gatherUsageStats": "false",
+            },
+          },
+          root
+        );
+
+        const poll = setInterval(function () {
+          const iframe = root.querySelector("iframe");
+          if (iframe) {
+            iframe.style.width = "100%";
+            iframe.style.height = "100vh";
+            iframe.style.border = "none";
+            iframe.style.display = "block";
+          }
+          if (iframe && iframe.contentWindow && iframe.contentDocument && iframe.contentDocument.readyState === "complete") {
+            clearInterval(poll);
+            setTimeout(function () { loading.classList.add("gone"); }, 500);
+          }
+        }, 300);
+      } catch (err) {
+        loading.querySelector(".steps").textContent =
+          "Error al cargar la aplicación: " + (err && err.message ? err.message : err);
+      }
+    })();
+  </script>
+</body>
+</html>
