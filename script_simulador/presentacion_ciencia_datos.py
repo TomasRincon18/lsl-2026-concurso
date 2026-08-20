@@ -1351,6 +1351,37 @@ border-radius:14px;padding:12px 18px;margin-top:10px;">
 """
 
 
+def html_semaforo_equidad():
+    """Protocolo de alerta por disparidad: decisión asociada a cada color."""
+
+    niveles = [
+        ("🟢", "<3%", "Verde", "Monitoreo continuo.", VERDE),
+        ("🟡", "3–5%", "Amarillo", "Revisión técnica; no detiene el despliegue.", AMBAR),
+        ("🟠", "5–10%", "Naranja", "Comité de gestión en 5 días · mitigación para el grupo afectado.", "#fb923c"),
+        ("🔴", ">10%", "Rojo", "Suspensión del módulo y notificación al Defensor Delegado.", ROJO),
+    ]
+
+    filas = "".join(
+        '<div style="display:flex;align-items:flex-start;gap:12px;padding:9px 0;'
+        'border-bottom:1px solid rgba(148,163,184,0.12);">'
+        f'<span style="min-width:80px;color:{color};font-weight:800;font-size:12.5px;">{icono} {umbral}</span>'
+        f'<span style="min-width:82px;color:#e2e8f0;font-weight:700;font-size:12.5px;">{nombre}</span>'
+        f'<span style="color:#94a3b8;font-size:12px;line-height:1.4;">{accion}</span>'
+        '</div>'
+        for icono, umbral, nombre, accion, color in niveles
+    )
+
+    return f"""
+<div style="background:rgba(148,163,184,0.06);border:1px solid rgba(148,163,184,0.18);
+border-radius:14px;padding:12px 18px;margin-top:10px;">
+  <div style="color:#f1f5f9;font-weight:800;font-size:13.5px;margin-bottom:6px;">
+    Protocolo de alerta por disparidad
+  </div>
+  {filas}
+</div>
+"""
+
+
 # ==========================================================
 # GENERACIÓN DE PQRSD
 # ==========================================================
@@ -2252,6 +2283,11 @@ with tab_resultados:
 
         st.markdown(
             html_equidad(resultado["disparidad"]),
+            unsafe_allow_html=True,
+        )
+
+        st.markdown(
+            html_semaforo_equidad(),
             unsafe_allow_html=True,
         )
 
