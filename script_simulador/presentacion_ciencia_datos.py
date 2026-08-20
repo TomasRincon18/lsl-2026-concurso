@@ -636,6 +636,33 @@ def refinar_modelos(metricas, feedback):
     return nuevas
 
 
+def disparidad_inicial(calidad_datos):
+    """Disparidad de equidad inicial: a menor calidad de datos, mayor sesgo."""
+    factor_calidad = limitar((calidad_datos - 0.60) / 0.40, 0.0, 1.0)
+    return limitar(
+        0.12 - 0.06 * factor_calidad + np.random.uniform(-0.015, 0.02),
+        0.01,
+        0.15,
+    )
+
+
+def refinar_equidad(disparidad):
+    """Reduce la disparidad de equidad en cada ciclo de refinamiento."""
+    return limitar(disparidad - np.random.uniform(0.006, 0.022), 0.01, 0.15)
+
+
+def nivel_equidad(disparidad):
+    """Devuelve (etiqueta, color) del semáforo de equidad."""
+    pct = disparidad * 100
+    if pct < 3:
+        return "🟢 Verde · monitoreo continuo", VERDE
+    if pct < 5:
+        return "🟡 Amarillo · revisión técnica", AMBAR
+    if pct <= 10:
+        return "🟠 Naranja · mitigar en 5 días", "#fb923c"
+    return "🔴 Rojo · suspender y notificar", ROJO
+
+
 def tabla_metricas(metricas):
     filas = []
 
@@ -664,6 +691,7 @@ NODOS_PIPELINE = {
     "refinamiento": {"label": "REFINAMIENTO\\n\\nM1 + M2 · Ajuste fino\\nM4 · Calibración semántica\\nM6 · RAG + ajuste de instrucciones", "shape": "box"},
     "human": {"label": "Validación humana\\nValidación profesional URAB", "shape": "box"},
     "criterios": {"label": "¿Cumple criterios\\nde aceptación?", "shape": "diamond"},
+    "equidad": {"label": "Pruebas de equidad\\nDisparidad ≤ 5%", "shape": "diamond"},
     "deploy": {"label": "Despliegue\\na producción", "shape": "box"},
     "integracion": {"label": "M7 · Interoperabilidad\\nIRIS ↔ IA ↔ VisionWeb", "shape": "box"},
     "operacion": {"label": "Operación integral\\nde PQRSD", "shape": "box"},
@@ -681,6 +709,7 @@ NOMBRES_ETAPAS = {
     "refinamiento": "Refinamiento",
     "human": "Validación humana",
     "criterios": "Criterios",
+    "equidad": "Equidad",
     "deploy": "Despliegue",
     "integracion": "Interoperabilidad",
     "operacion": "Operación",
@@ -729,7 +758,9 @@ def construir_diagrama(etapa_activa=None, ventana=VENTANA_ZOOM):
             lineas.append(nodo(clave, INACTIVO, TEXTO_CLARO, NODOS_PIPELINE[clave]["shape"]))
         lineas.append("datos -> preparacion -> modelos -> evaluacion")
         lineas.append("evaluacion -> refinamiento -> human -> criterios")
-        lineas.append('criterios -> deploy [ label=" Cumple" ]')
+        lineas.append('criterios -> equidad [ label=" Metas OK" ]')
+        lineas.append('equidad -> deploy [ label=" Disparidad ≤ 5%" ]')
+        lineas.append('equidad -> evaluacion [ label=" Sesgo > 5%", style=dashed ]')
         lineas.append('criterios -> evaluacion [ label=" Refinar", style=dashed ]')
         lineas.append("deploy -> integracion -> operacion -> mlops -> feedback")
         lineas.append('feedback -> evaluacion [ label=" Nuevo ciclo", style=dashed ]')
@@ -754,8 +785,10 @@ def construir_diagrama(etapa_activa=None, ventana=VENTANA_ZOOM):
             lineas.append(nodo(clave, color(clave), fuente(clave), NODOS_PIPELINE[clave]["shape"]))
 
         for origen, destino in zip(visibles, visibles[1:]):
-            if origen == "criterios" and destino == "deploy":
-                lineas.append('criterios -> deploy [ label=" Cumple" ]')
+            if origen == "criterios" and destino == "equidad":
+                lineas.append('criterios -> equidad [ label=" Metas OK" ]')
+            elif origen == "equidad" and destino == "deploy":
+                lineas.append('equidad -> deploy [ label=" ≤ 5%" ]')
             else:
                 lineas.append(f"{origen} -> {destino}")
 
@@ -772,6 +805,11 @@ def construir_diagrama(etapa_activa=None, ventana=VENTANA_ZOOM):
             lineas.append('criterios -> evaluacion [ label=" Refinar", style=dashed ]')
         elif "criterios" in visibles and anteriores:
             lineas.append('criterios -> prev [ label=" Refinar", style=dashed ]')
+
+        if "equidad" in visibles and "evaluacion" in visibles:
+            lineas.append('equidad -> evaluacion [ label=" Sesgo > 5%", style=dashed ]')
+        elif "equidad" in visibles and anteriores:
+            lineas.append('equidad -> prev [ label=" Sesgo > 5%", style=dashed ]')
 
         if "feedback" in visibles and "evaluacion" in visibles:
             lineas.append('feedback -> evaluacion [ label=" Nuevo ciclo", style=dashed ]')
@@ -1266,6 +1304,53 @@ border-radius:14px;padding:14px 18px;">
 {script}"""
 
 
+def html_equidad(disparidad):
+    """Indicador de equidad algorítmica: disparidad entre grupos con su
+    semáforo (<3% verde, 3–5% amarillo, 5–10% naranja, >10% rojo)."""
+
+    pct = disparidad * 100
+    nivel, color = nivel_equidad(disparidad)
+
+    # barra con las zonas del semáforo; marcador en el valor actual
+    ancho = min(max(pct, 0.0), 15.0) / 15.0 * 100
+
+    return f"""
+<div style="background:rgba(148,163,184,0.06);border:1px solid rgba(148,163,184,0.18);
+border-radius:14px;padding:12px 18px;margin-top:10px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;
+  flex-wrap:wrap;gap:6px;margin-bottom:8px;">
+    <div style="color:#f1f5f9;font-weight:800;font-size:14.5px;">
+      ⚖️ Equidad algorítmica
+    </div>
+    <div style="font-family:JetBrains Mono,monospace;font-size:14px;font-weight:700;color:{color};">
+      {pct:.1f}% de disparidad
+    </div>
+  </div>
+
+  <div style="position:relative;height:16px;border-radius:8px;overflow:hidden;
+  background:linear-gradient(90deg,
+    rgba(16,185,129,0.5) 0%, rgba(16,185,129,0.5) 20%,
+    rgba(245,158,11,0.5) 20%, rgba(245,158,11,0.5) 33.3%,
+    rgba(249,115,22,0.55) 33.3%, rgba(249,115,22,0.55) 66.7%,
+    rgba(244,63,94,0.6) 66.7%, rgba(244,63,94,0.6) 100%);">
+    <div style="position:absolute;left:{min(pct, 15.0) / 15.0 * 100:.1f}%;top:-4px;bottom:-4px;
+    width:2px;background:#f8fafc;box-shadow:0 0 8px rgba(248,250,252,0.8);"></div>
+  </div>
+
+  <div style="display:flex;justify-content:space-between;margin-top:5px;
+  font-size:10.5px;color:#64748b;">
+    <span>🟢 &lt;3%</span><span>🟡 3–5%</span><span>🟠 5–10%</span><span>🔴 &gt;10%</span>
+  </div>
+
+  <div style="margin-top:8px;font-size:12px;font-weight:600;color:{color};">{nivel}</div>
+
+  <div style="margin-top:4px;color:#64748b;font-size:11px;">
+    Equal Opportunity · Demographic Parity · DIR &gt; 0.80 · FNR por grupo
+  </div>
+</div>
+"""
+
+
 # ==========================================================
 # GENERACIÓN DE PQRSD
 # ==========================================================
@@ -1404,7 +1489,8 @@ with st.sidebar:
         "- M1 extracción: **≥90%**\n"
         "- M2 accuracy: **≥90%** · recall urgencias: **≥99%**\n"
         "- M4 precisión: **≥85%** · recall duplicados: **≥90%**\n"
-        "- M6 aceptación profesional: **≥70%**",
+        "- M6 aceptación profesional: **≥70%**\n"
+        "- Equidad: disparidad **≤5%**",
     )
 
     st.divider()
@@ -1646,12 +1732,14 @@ def generar_simulacion(num_pqrsd, calidad_datos, iteraciones_max, nivel_deriva, 
     historial = []
     desplegado = False
     necesita_reentrenamiento = False
+    bloqueado_por_equidad = False
     feedback_acumulado = 0
     pqrsd_validas = 0
+    disparidad = disparidad_inicial(calidad_datos)
 
     def frame(tipo, texto, etapa, progreso=None, texto_barra=None,
               metricas=None, metricas_prev=None, historial_frame=None,
-              duerme=0.0, final=False, resultado=None):
+              disparidad_frame=None, duerme=0.0, final=False, resultado=None):
         return {
             "tipo": tipo,
             "texto": texto,
@@ -1661,6 +1749,7 @@ def generar_simulacion(num_pqrsd, calidad_datos, iteraciones_max, nivel_deriva, 
             "metricas": metricas,
             "metricas_prev": metricas_prev,
             "historial": historial_frame,
+            "disparidad": disparidad_frame,
             "duerme": duerme,
             "final": final,
             "resultado": resultado,
@@ -1682,6 +1771,7 @@ def generar_simulacion(num_pqrsd, calidad_datos, iteraciones_max, nivel_deriva, 
     yield frame("info", "🧠 Adaptando los modelos de IA al contexto de la URAB...",
                 "modelos", 20, "Modelos adaptados",
                 metricas=metricas, metricas_prev=metricas_prev,
+                disparidad_frame=disparidad,
                 duerme=tiempo_por_evento)
 
     # 4. Ciclos de refinamiento
@@ -1718,12 +1808,26 @@ def generar_simulacion(num_pqrsd, calidad_datos, iteraciones_max, nivel_deriva, 
         metricas_prev = metricas.copy()
 
         if cumple_criterios(metricas):
-            desplegado = True
-            yield frame("success", f"✅ Ciclo {ciclo}: criterios de aceptación alcanzados.",
-                        "criterios", duerme=tiempo_por_evento)
-            break
+
+            # Gate de equidad: solo se despliega con disparidad ≤ 5%.
+            yield frame("warning", f"⚖️ Ciclo {ciclo}: pruebas de equidad algorítmica...",
+                        "equidad", disparidad_frame=disparidad,
+                        duerme=tiempo_por_evento)
+
+            if disparidad <= 0.05:
+                desplegado = True
+                yield frame("success", f"✅ Ciclo {ciclo}: criterios y equidad (≤5%) alcanzados.",
+                            "equidad", duerme=tiempo_por_evento)
+                break
+            else:
+                bloqueado_por_equidad = True
+                yield frame("warning",
+                            f"⚠️ Ciclo {ciclo}: metas cumplidas, pero la disparidad de equidad "
+                            f"es de {disparidad * 100:.1f}% (>5%). Se refina para reducir el sesgo.",
+                            "equidad", duerme=tiempo_por_evento)
 
         metricas = refinar_modelos(metricas, feedback_acumulado)
+        disparidad = refinar_equidad(disparidad)
 
     # 5. Despliegue y producción
     produccion = []
@@ -1777,17 +1881,33 @@ def generar_simulacion(num_pqrsd, calidad_datos, iteraciones_max, nivel_deriva, 
                     "feedback", 92, "Monitoreo activo", duerme=tiempo_por_evento)
 
     else:
-        yield frame("error", "❌ No se alcanzaron todos los criterios. "
-                    "La versión no será promovida a producción.",
-                    "criterios", duerme=tiempo_por_evento)
+        if bloqueado_por_equidad:
+            yield frame("error", "❌ No se logró reducir la disparidad de equidad al 5%. "
+                        "La versión no será promovida a producción.",
+                        "equidad", duerme=tiempo_por_evento)
+        else:
+            yield frame("error", "❌ No se alcanzaron todos los criterios. "
+                        "La versión no será promovida a producción.",
+                        "criterios", duerme=tiempo_por_evento)
 
     # 6. Finalización
+    if desplegado:
+        tipo_final = "success"
+        texto_final = "✅ Simulación finalizada: la solución fue desplegada y monitoreada."
+        etapa_final = "feedback"
+    elif bloqueado_por_equidad:
+        tipo_final = "error"
+        texto_final = "❌ Simulación finalizada: no se superó el gate de equidad (disparidad >5%)."
+        etapa_final = "equidad"
+    else:
+        tipo_final = "error"
+        texto_final = "❌ Simulación finalizada: no se alcanzaron los criterios de aceptación."
+        etapa_final = "criterios"
+
     yield frame(
-        "success" if desplegado else "error",
-        ("✅ Simulación finalizada: la solución fue desplegada y monitoreada."
-         if desplegado
-         else "❌ Simulación finalizada: no se alcanzaron los criterios de aceptación."),
-        "feedback" if desplegado else "criterios",
+        tipo_final,
+        texto_final,
+        etapa_final,
         100, "Simulación finalizada",
         final=True,
         resultado={
@@ -1796,6 +1916,8 @@ def generar_simulacion(num_pqrsd, calidad_datos, iteraciones_max, nivel_deriva, 
             "desplegado": desplegado,
             "produccion": produccion,
             "retraining": necesita_reentrenamiento,
+            "disparidad": disparidad,
+            "bloqueado_por_equidad": bloqueado_por_equidad,
             "validas": pqrsd_validas,
             "rechazadas": num_pqrsd - pqrsd_validas,
             "num_pqrsd": num_pqrsd,
@@ -1804,7 +1926,8 @@ def generar_simulacion(num_pqrsd, calidad_datos, iteraciones_max, nivel_deriva, 
 
 
 def render_frame(frame, vis, estado_texto, grafico_dinamico, pista_dinamica,
-                 barra_progreso, metricas_dinamicas, evolucion_dinamica):
+                 barra_progreso, metricas_dinamicas, evolucion_dinamica,
+                 equidad_dinamica):
     """Renderiza un frame de la simulación en los contenedores dinámicos."""
 
     metodos = {
@@ -1856,6 +1979,15 @@ def render_frame(frame, vis, estado_texto, grafico_dinamico, pista_dinamica,
             unsafe_allow_javascript=True,
         )
         vis["animar_evolucion"] = False
+
+    if frame["disparidad"] is not None:
+        vis["disparidad"] = frame["disparidad"]
+
+    if vis.get("disparidad") is not None:
+        equidad_dinamica.html(
+            html_equidad(vis["disparidad"]),
+            unsafe_allow_javascript=True,
+        )
 
 
 # ==========================================================
@@ -1966,6 +2098,7 @@ with tab_simulacion:
     barra_progreso = st.progress(0, text="Lista para ejecutar")
     metricas_dinamicas = st.empty()
     evolucion_dinamica = st.empty()
+    equidad_dinamica = st.empty()
 
     if ejecutar:
         st.session_state.sim_estado = {
@@ -1986,10 +2119,11 @@ with tab_simulacion:
                 f_pausa = dict(sim["frame"])
                 f_pausa["metricas"] = None
                 f_pausa["historial"] = None
+                f_pausa["disparidad"] = None
                 render_frame(
                     f_pausa, sim["vis"], estado_texto, grafico_dinamico,
                     pista_dinamica, barra_progreso, metricas_dinamicas,
-                    evolucion_dinamica,
+                    evolucion_dinamica, equidad_dinamica,
                 )
             st.caption("⏸ Simulación en pausa — pulsa ▶ Reanudar para continuar.")
         else:
@@ -2002,7 +2136,7 @@ with tab_simulacion:
                 render_frame(
                     frame, sim["vis"], estado_texto, grafico_dinamico,
                     pista_dinamica, barra_progreso, metricas_dinamicas,
-                    evolucion_dinamica,
+                    evolucion_dinamica, equidad_dinamica,
                 )
                 sim["frame"] = frame
 
@@ -2113,6 +2247,13 @@ with tab_resultados:
                     ),
                 },
             )
+
+        st.subheader("⚖️ Equidad algorítmica")
+
+        st.markdown(
+            html_equidad(resultado["disparidad"]),
+            unsafe_allow_html=True,
+        )
 
         if resultado["desplegado"]:
 

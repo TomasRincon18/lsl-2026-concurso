@@ -145,20 +145,28 @@ propios profesionales validan.
 
 ## Equidad y sesgos — 1 minuto
 
+**[SIMULADOR: en "Resultados", señala la sección "Equidad algorítmica" (o el nodo
+"Pruebas de equidad" del flujo).]**
+
 Hay algo que nos separa de cualquier chatbot: **tratamos la equidad como un
 requisito de ingeniería, no como una promesa.**
 
 Porque un modelo puede ser preciso en promedio... y aun así tratar peor a un
-grupo. Que acierte el 91% de las veces para unos, y el 84% para otros. En la
-Defensoría eso es **inadmisible**: vulnera el derecho a la igualdad.
+grupo. Medimos cuatro cosas: que detecte **igual de bien a todos los grupos**, que
+los resultados se repartan parejo, que ningún grupo rinda por debajo del 80% del
+mejor, y que no se le escapen más casos urgentes a un grupo que a otro.
 
-Por eso medimos la equidad **por género, por territorio, por grupo de especial
-protección**. Y lo convertimos en un semáforo de cuatro niveles: si la
-disparidad es menor al 3%, todo en verde. Si pasa del 10%... **se suspende el
-módulo y se notifica al Defensor Delegado**.
+Miren el flujo: antes de desplegar hay un **gate de equidad**. La disparidad
+tiene que bajar del **5%**. Si no, no sale.
 
-Y la regla es innegociable: **si las pruebas de equidad no se superan, no hay
-despliegue.** Así de simple.
+Y esto no es teoría. Un ejemplo real: imaginen que el modelo acierta el **91%
+para hombres** y el **84% para mujeres**. Son solo siete puntos... pero para una
+mujer cuyo caso de riesgo vital se clasificó mal, son siete puntos inaceptables.
+Nuestro sistema lo detecta, lo marca en naranja y **detiene el despliegue** hasta
+corregirlo.
+
+Si la disparidad pasa del 10%, se suspende el módulo y se notifica al Defensor
+Delegado. La regla es innegociable: **sin equidad superada, no hay despliegue.**
 
 ---
 
@@ -210,5 +218,6 @@ Muchas gracias.
 | Arquitectura modular | "Simulación en vivo" → configurar sliders → "Ejecutar simulación" |
 | Proyección | Dejar correr la simulación (flujo + barra de progreso) |
 | Necesidades resueltas | Dejar la simulación corriendo de fondo |
+| Equidad y sesgos | "Resultados" → sección "Equidad algorítmica" |
 | Por qué la nuestra | "Resultados" → monitoreo de producción |
 | Cierre | "Recepción de PQRSD" → "Iniciar recepción" |
