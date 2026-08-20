@@ -1391,15 +1391,13 @@ with st.sidebar:
 
     st.divider()
 
-    st.markdown("**🎯 Metas comprometidas**")
+    st.markdown("**🎯 Metas que evalúa la simulación**")
 
     st.markdown(
         "- M1 extracción: **≥90%**\n"
         "- M2 accuracy: **≥90%** · recall urgencias: **≥99%**\n"
         "- M4 precisión: **≥85%** · recall duplicados: **≥90%**\n"
-        "- M6 aceptación profesional: **≥70%**\n"
-        "- M7 sincronización IRIS/VisionWeb: **≥99.5%**\n"
-        "- MLOps: drift <3% en verde · equidad ≤5% de disparidad",
+        "- M6 aceptación profesional: **≥70%**",
     )
 
     st.divider()
